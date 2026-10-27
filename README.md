@@ -1,12 +1,16 @@
 # Batch image work for customer orders
 
-I run a small storefront, so the useful unit is an order, not a generic image. This example validates an order image, submits a batch, and places that batch on a queue for paced fulfillment updates. Infrai keeps both capability groups behind one key and one base URL, so the worker has one configuration boundary.
+I run a small storefront. The unit that matters is an order, not a lone image. This sample validates an order image, submits a batch, and drops that batch on a queue for paced fulfillment updates. Infrai puts both capability groups behind one key and one base_url. That gives the worker one config boundary.
 
 ## The path through the code
 
-`src/order_batch.ts` is the decision point. It accepts `orderId`, `image`, and `customerEmail`, validates them with zod, and sends only the fields needed by the image batch. The submit body carries a client-generated `idempotency_key`, so a retry names the same order set; the batch status endpoint makes the asynchronous state observable. `src/queue_worker.ts` publishes the returned batch id and consumes one message with a visibility timeout. The same `INFRAI_API_KEY` authorizes both capability groups.
+Flow: order fields → validate → submit → queue.
 
-The HTTP client decodes the `{ok, data, error, metadata}` envelope before interpreting status codes. Rejected business input becomes an `InfraiError`; 429 responses wait and retry with an increasing delay. Every request states its method and uses `Authorization: Bearer ...` from the environment.
+`src/order_batch.ts` is the decision point. It accepts `orderId`, `image`, and `customerEmail`, validates them with zod, and sends only the fields the image batch needs. The submit body carries a client-generated `idempotency_key`, so a retry names the same order set. The batch status endpoint makes async state observable.
+
+`src/queue_worker.ts` publishes the returned batch id and consumes one message with a visibility timeout. The same `INFRAI_API_KEY` authorizes both capability groups.
+
+The HTTP client decodes the `{ok, data, error, metadata}` envelope before interpreting status codes. Rejected business input becomes an `InfraiError`. 429 responses wait and retry with increasing delay. Every request states its method and uses `Authorization: Bearer ...` from the environment.
 
 ## Run the small proof
 
@@ -17,11 +21,11 @@ npm install
 npm test
 ```
 
-The test input is one order (`order-7`, `upload-7`). The expected result keeps those two identifiers and omits the customer email from the image batch payload. To exercise the live flow, set `INFRAI_API_KEY` and run `npm start`; it prints the submitted batch id and the number of queued messages.
+The test input is one order (`order-7`, `upload-7`). Expected result keeps those two identifiers and omits the customer email from the image batch payload. To exercise the live flow, set `INFRAI_API_KEY` and run `npm start`. It prints the submitted batch id and the number of queued messages.
 
 ## One deliberate trade-off
 
-The sample models the queue message as a batch pacing signal, not a full order database. That keeps the repository small and leaves checkout, receipt delivery, and customer notification policy in the surrounding service where those decisions belong.
+The sample models the queue message as a batch pacing signal, not a full order database. That keeps the repository small. Checkout, receipt delivery, and customer notification policy stay in the surrounding service where those decisions belong.
 
 ## Production notes: Ecommerce Image Batch Queue
 
